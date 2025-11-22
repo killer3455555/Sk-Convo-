@@ -1,121 +1,102 @@
-from flask import Flask, request, render_template_string
-import requests
-import re
+# app.py
 
-# Flask app initialize karna
+import os
+import requests
+from flask import Flask, request, render_template_string
+
+# Flask app ka ek instance banayein
 app = Flask(__name__)
 
-# --- HTML Template (Web Page ka Design) ---
+def get_facebook_token(cookie):
+    """
+    Yeh function Facebook cookie ka istemal karke access token haasil karta hai.
+    """
+    headers = {
+        'authority': 'business.facebook.com',
+        'accept-language': 'en-US,en;q=0.9',
+        'cookie': cookie,
+        'referer': 'https://www.facebook.com/',
+        'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/107.0.0.0 Safari/537.36',
+    }
+    try:
+        response = requests.get('https://business.facebook.com/content_management', headers=headers, timeout=10)
+        response.raise_for_status() # Agar request fail ho to error raise karega
+        
+        response_text = response.text
+        token_keyword = '"accessToken":"'
+        start_index = response_text.find(token_keyword)
+
+        if start_index == -1:
+            return "Error: Token nahi mila. Cookie ghalat hai ya expire ho chuki hai."
+
+        token_part = response_text[start_index + len(token_keyword):]
+        end_index = token_part.find('"')
+        
+        if end_index == -1:
+            return "Error: Token ka format sahi nahi mila."
+
+        access_token = token_part[:end_index]
+        
+        if access_token.startswith("EAAG"):
+            return access_token
+        else:
+            return "Error: Token mila lekin 'EAAG' format ka nahi hai. Facebook ne shayad page badal diya hai."
+
+    except requests.exceptions.RequestException as e:
+        return f"Error: Network request fail ho gayi - {e}"
+    except Exception as e:
+        return f"An unexpected error occurred: {e}"
+
+# HTML Template jo browser mein dikhega
 HTML_TEMPLATE = """
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Cookie to Token Generator</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <title>Facebook Token Generator</title>
     <style>
-        body { background-color: #121212; color: white; display: flex; align-items: center; justify-content: center; min-height: 100vh; }
-        .container { max-width: 600px; background-color: #1e1e1e; border-radius: 15px; padding: 30px; box-shadow: 0 0 20px rgba(0, 136, 255, 0.1); }
-        textarea.form-control { background-color: #2a2a2a; border: 1px solid #444; color: white; height: 150px; }
-        textarea.form-control:focus { background-color: #2a2a2a; color: white; box-shadow: none; border-color: #0088ff; }
-        .btn-generate { background-color: #0088ff; border: none; color: white; font-weight: bold; }
-        .btn-generate:hover { background-color: #006edc; }
-        .token-box { background-color: #2a2a2a; padding: 15px; border-radius: 5px; word-wrap: break-word; margin-top: 20px; border: 1px dashed #444; }
-        .footer { text-align: center; margin-top: 20px; color: #888; font-size: 0.9em; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; background-color: #f0f2f5; color: #1c1e21; margin: 0; padding: 20px; display: flex; justify-content: center; align-items: center; min-height: 100vh; }
+        .container { background: #fff; padding: 30px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1); max-width: 600px; width: 100%; }
+        h1 { color: #1877f2; text-align: center; margin-bottom: 20px; }
+        textarea { width: 100%; padding: 10px; border: 1px solid #dddfe2; border-radius: 6px; margin-bottom: 15px; font-size: 14px; min-height: 100px; box-sizing: border-box; }
+        input[type="submit"] { width: 100%; background-color: #1877f2; color: white; padding: 12px; border: none; border-radius: 6px; font-size: 16px; font-weight: bold; cursor: pointer; }
+        input[type="submit"]:hover { background-color: #166fe5; }
+        .result { background: #e7f3ff; border: 1px solid #1877f2; padding: 15px; border-radius: 6px; margin-top: 20px; word-wrap: break-word; }
+        .error { background: #ffebe8; border: 1px solid #dd3c1e; }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1 class="text-center mb-4" style="color: #0088ff;">Cookie to Token Generator</h1>
-        <p class="text-center text-muted">Apne Facebook account ki cookies paste karein aur non-expiring token haasil karein.</p>
+        <h1>Facebook Access Token Generator</h1>
         <form method="post">
-            <div class="mb-3">
-                <label for="cookie" class="form-label">Facebook Cookies</label>
-                <textarea class="form-control" id="cookie" name="cookie" placeholder="Yahan apni cookies paste karein..." required></textarea>
-            </div>
-            <button type="submit" class="btn btn-generate w-100">Generate Non-Expiring Token</button>
+            <textarea name="cookie" placeholder="Apni Facebook cookie yahan paste karein..." required>{{ cookie_input }}</textarea>
+            <input type="submit" value="Get Token">
         </form>
-
-        {% if error %}
-        <div class="alert alert-danger mt-4">{{ error }}</div>
+        {% if result %}
+            <div class="result {% if 'Error' in result %}error{% endif %}">
+                <strong>Result:</strong><br>
+                {{ result }}
+            </div>
         {% endif %}
-
-        {% if token %}
-        <div class="mt-4">
-            <h5 style="color: #0088ff;">✅ Token (EAAAAU) Generated Successfully:</h5>
-            <div class="token-box" id="token-text">{{ token }}</div>
-            <button class="btn btn-secondary mt-2 w-100" onclick="copyToken()">Copy Token</button>
-        </div>
-        {% endif %}
-        
-        <div class="footer">
-            <p>© 2025 | Non-Stop 24/7 Service</p>
-        </div>
     </div>
-
-    <script>
-        function copyToken() {
-            const tokenText = document.getElementById('token-text').innerText;
-            navigator.clipboard.writeText(tokenText).then(() => {
-                alert('Token copied to clipboard!');
-            });
-        }
-    </script>
 </body>
 </html>
 """
 
-# --- Token Banane ka Main Function ---
-def get_token_from_cookie(cookie):
-    """
-    Yeh function Facebook cookies ka istemal karke non-expiring token haasil karta hai.
-    """
-    headers = {
-        'User-Agent': 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36',
-        'Accept-Language': 'en-US,en;q=0.9',
-        'Cookie': cookie  # Yahan user ki di hui cookie istemal hogi
-    }
-    
-    try:
-        # Business page se token nikalna
-        business_url = 'https://business.facebook.com/content_management'
-        res = requests.get(business_url, headers=headers, timeout=10)
-        res.raise_for_status()
-        
-        # Page ke response mein se token dhoondna
-        token_match = re.search(r'\"accessToken\":\"(EAA[a-zA-Z0-9]+)\"', res.text)
-        
-        if not token_match:
-            raise Exception("Access token nahi mila. Aapki cookies galat, expire, ya invalid ho sakti hain. Ya phir aapka account business account nahi hai.")
-            
-        return token_match.group(1)
-
-    except requests.exceptions.RequestException as e:
-        raise Exception(f"Network mein masla hai: {e}")
-    except Exception as e:
-        raise e
-
-# --- Web Routes (URL Handling) ---
-@app.route("/", methods=["GET", "POST"])
-def main_page():
-    if request.method == "POST":
-        cookie = request.form.get("cookie")
-        token = None
-        error = None
-        
-        if not cookie:
-            error = "Cookies ka field khaali nahi ho sakta."
+@app.route('/', methods=['GET', 'POST'])
+def home():
+    result = ""
+    cookie_input = ""
+    if request.method == 'POST':
+        cookie = request.form.get('cookie')
+        cookie_input = cookie
+        if cookie:
+            result = get_facebook_token(cookie)
         else:
-            try:
-                token = get_token_from_cookie(cookie)
-            except Exception as e:
-                error = str(e)
-        
-        return render_template_string(HTML_TEMPLATE, token=token, error=error)
-    
-    return render_template_string(HTML_TEMPLATE)
+            result = "Error: Cookie khali hai."
+    return render_template_string(HTML_TEMPLATE, result=result, cookie_input=cookie_input)
 
-# --- Script ko Chalane ke liye ---
 if __name__ == "__main__":
-    app.run(host='0.0.0.0', port=5000, debug=True)
+    port = int(os.environ.get('PORT', 5000))
+    app.run(host='0.0.0.0', port=port)
