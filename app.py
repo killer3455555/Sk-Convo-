@@ -1,33 +1,43 @@
-# app.py
+# app.py (Updated Version)
 
 import os
 import requests
 from flask import Flask, request, render_template_string
 
-# Flask app ka ek instance banayein
 app = Flask(__name__)
 
 def get_facebook_token(cookie):
     """
     Yeh function Facebook cookie ka istemal karke access token haasil karta hai.
     """
+    # Headers ko update kiya gaya hai taake request zyada aam lage
     headers = {
         'authority': 'business.facebook.com',
+        'accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9',
         'accept-language': 'en-US,en;q=0.9',
+        'cache-control': 'max-age=0',
         'cookie': cookie,
-        'referer': 'https://www.facebook.com/',
+        'sec-ch-ua': '"Chromium";v="107", "Not=A?Brand";v="24"',
+        'sec-ch-ua-mobile': '?0',
+        'sec-ch-ua-platform': '"Windows"',
+        'sec-fetch-dest': 'document',
+        'sec-fetch-mode': 'navigate',
+        'sec-fetch-site': 'none',
+        'sec-fetch-user': '?1',
+        'upgrade-insecure-requests': '1',
         'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/107.0.0.0 Safari/537.36',
     }
     try:
-        response = requests.get('https://business.facebook.com/content_management', headers=headers, timeout=10)
-        response.raise_for_status() # Agar request fail ho to error raise karega
-        
+        # business.facebook.com par request bhej kar response ka text haasil karein
+        response = requests.get('https://business.facebook.com/content_management', headers=headers, timeout=15)
+        response.raise_for_status()  # Agar 4xx ya 5xx error ho to yahan ruk jayega
+
         response_text = response.text
         token_keyword = '"accessToken":"'
         start_index = response_text.find(token_keyword)
 
         if start_index == -1:
-            return "Error: Token nahi mila. Cookie ghalat hai ya expire ho chuki hai."
+            return "Error: Token nahi mila. Cookie ghalat hai, expire ho chuki hai, ya Facebook ne page layout badal diya hai."
 
         token_part = response_text[start_index + len(token_keyword):]
         end_index = token_part.find('"')
@@ -40,14 +50,17 @@ def get_facebook_token(cookie):
         if access_token.startswith("EAAG"):
             return access_token
         else:
-            return "Error: Token mila lekin 'EAAG' format ka nahi hai. Facebook ne shayad page badal diya hai."
+            return "Error: Token mila lekin 'EAAG' format ka nahi hai."
 
+    except requests.exceptions.HTTPError as e:
+        # Khaas taur par 400/403/500 errors ke liye
+        return f"HTTP Error: Request fail ho gayi - {e}"
     except requests.exceptions.RequestException as e:
-        return f"Error: Network request fail ho gayi - {e}"
+        return f"Network Error: Request bhejne mein masla hua - {e}"
     except Exception as e:
         return f"An unexpected error occurred: {e}"
 
-# HTML Template jo browser mein dikhega
+# HTML Template (is mein koi tabdeeli nahi)
 HTML_TEMPLATE = """
 <!DOCTYPE html>
 <html lang="en">
