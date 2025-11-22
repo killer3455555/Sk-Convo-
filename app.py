@@ -1,7 +1,8 @@
-# app.py (Updated Version)
+# app.py (Final Updated Version)
 
 import os
 import requests
+import re # Regular expressions ke liye
 from flask import Flask, request, render_template_string
 
 app = Flask(__name__)
@@ -9,8 +10,8 @@ app = Flask(__name__)
 def get_facebook_token(cookie):
     """
     Yeh function Facebook cookie ka istemal karke access token haasil karta hai.
+    Yeh ab do alag-alag tareeqe aazmata hai.
     """
-    # Headers ko update kiya gaya hai taake request zyada aam lage
     headers = {
         'authority': 'business.facebook.com',
         'accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9',
@@ -27,34 +28,38 @@ def get_facebook_token(cookie):
         'upgrade-insecure-requests': '1',
         'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/107.0.0.0 Safari/537.36',
     }
+    
     try:
-        # business.facebook.com par request bhej kar response ka text haasil karein
-        response = requests.get('https://business.facebook.com/content_management', headers=headers, timeout=15)
-        response.raise_for_status()  # Agar 4xx ya 5xx error ho to yahan ruk jayega
-
-        response_text = response.text
-        token_keyword = '"accessToken":"'
-        start_index = response_text.find(token_keyword)
-
-        if start_index == -1:
-            return "Error: Token nahi mila. Cookie ghalat hai, expire ho chuki hai, ya Facebook ne page layout badal diya hai."
-
-        token_part = response_text[start_index + len(token_keyword):]
-        end_index = token_part.find('"')
+        # Tareeqa 1: adsmanager se token nikalne ki koshish karein
+        url = "https://www.facebook.com/adsmanager/manage/campaigns"
+        headers['authority'] = 'www.facebook.com' # Authority ko update karein
         
-        if end_index == -1:
-            return "Error: Token ka format sahi nahi mila."
-
-        access_token = token_part[:end_index]
+        response = requests.get(url, headers=headers, timeout=15)
+        response.raise_for_status()
         
-        if access_token.startswith("EAAG"):
-            return access_token
-        else:
-            return "Error: Token mila lekin 'EAAG' format ka nahi hai."
+        # Regular expression ka istemal karke "EAAG" se shuru hone wala token dhoondein
+        # Yeh tareeqa zyada reliable hai
+        match = re.search(r'"accessToken":"(EAAG\w+)"', response.text)
+        
+        if match:
+            return match.group(1) # Token mil gaya
+        
+        # Agar Tareeqa 1 fail ho, to purana Tareeqa 2 aazmayein
+        # Tareeqa 2: business.facebook.com se koshish karein
+        url = "https://business.facebook.com/content_management"
+        headers['authority'] = 'business.facebook.com' # Authority wapas set karein
+        
+        response = requests.get(url, headers=headers, timeout=15)
+        response.raise_for_status()
+        
+        match = re.search(r'"accessToken":"(EAAG\w+)"', response.text)
+        if match:
+            return match.group(1)
+
+        return "Error: Dono tareeqo se 'EAAG' format ka token nahi mila. Account requirements poori nahi hain ya cookie expire ho chuki hai."
 
     except requests.exceptions.HTTPError as e:
-        # Khaas taur par 400/403/500 errors ke liye
-        return f"HTTP Error: Request fail ho gayi - {e}"
+        return f"HTTP Error: Request fail ho gayi - {e}. Shayad cookie ghalat hai."
     except requests.exceptions.RequestException as e:
         return f"Network Error: Request bhejne mein masla hua - {e}"
     except Exception as e:
@@ -81,7 +86,7 @@ HTML_TEMPLATE = """
 </head>
 <body>
     <div class="container">
-        <h1>Facebook Access Token Generator</h1>
+        <h1>Facebook Token Generator</h1>
         <form method="post">
             <textarea name="cookie" placeholder="Apni Facebook cookie yahan paste karein..." required>{{ cookie_input }}</textarea>
             <input type="submit" value="Get Token">
