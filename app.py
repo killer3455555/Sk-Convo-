@@ -1,4 +1,4 @@
-# app.py (Final Clean Version for Lifetime Token)
+# app.py (Final Clean Version for Lifetime Token on Render)
 
 import os
 import requests
@@ -34,7 +34,12 @@ def get_monokai_style_token(username, password):
         if 'access_token' in response_data:
             return response_data['access_token']
         elif 'error_msg' in response_data:
-            return f"Error: {response_data['error_msg']}"
+            # Facebook se milne wale error ko saaf karke dikhayein
+            error_message = response_data['error_msg']
+            if 'Invalid username or password' in error_message:
+                return "Error: Invalid username or password. (Agar 2FA on hai to App Password istemal karein)."
+            else:
+                return f"Error: {error_message}"
         else:
             return f"Error: An unknown error occurred. Response: {response_data}"
     except Exception as e:
