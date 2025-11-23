@@ -1,4 +1,4 @@
-# app.py (Final Clean Version for Lifetime Token on Render)
+# app.py (Sab Se Aasan Version - Sirf Non-2FA Accounts Ke Liye)
 
 import os
 import requests
@@ -7,9 +7,10 @@ from flask import Flask, request, render_template_string
 
 app = Flask(__name__)
 
-def get_monokai_style_token(username, password):
+def get_simple_token(username, password):
     """
-    Facebook Android App ki API ka istemal karke User Access Token haasil karta hai.
+    Sirf username aur asli password se token nikalta hai.
+    Yeh sirf un accounts par kaam karega jin par 2FA on nahi hai.
     """
     api_key = "882a8490361da98702bf97a021ddc14d"
     secret = "62f8ce9f74b12f84c123cc23437a4a32"
@@ -34,50 +35,42 @@ def get_monokai_style_token(username, password):
         if 'access_token' in response_data:
             return response_data['access_token']
         elif 'error_msg' in response_data:
-            # Facebook se milne wale error ko saaf karke dikhayein
-            error_message = response_data['error_msg']
-            if 'Invalid username or password' in error_message:
-                return "Error: Invalid username or password. (Agar 2FA on hai to App Password istemal karein)."
-            else:
-                return f"Error: {error_message}"
+            return f"Error: {response_data['error_msg']}"
         else:
-            return f"Error: An unknown error occurred. Response: {response_data}"
+            return f"Error: An unknown error occurred."
     except Exception as e:
         return f"Error: {e}"
 
-# --- Saaf Suthra HTML Template ---
+# --- Simple HTML Template ---
 HTML_TEMPLATE = """
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Lifetime Token Generator</title>
+    <title>Simple Token Generator</title>
     <style>
-        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; background-color: #f0f2f5; color: #1c1e21; margin: 0; padding: 20px; display: flex; justify-content: center; align-items: center; min-height: 100vh; }
-        .container { background: #fff; padding: 30px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1); max-width: 500px; width: 100%; }
-        h1 { color: #1877f2; text-align: center; margin-bottom: 10px; }
-        p { text-align: center; color: #606770; margin-top: 0; margin-bottom: 20px; }
-        input[type="text"], input[type="password"] { width: 100%; padding: 12px; border: 1px solid #dddfe2; border-radius: 6px; margin-bottom: 15px; font-size: 16px; box-sizing: border-box; }
-        input[type="submit"] { width: 100%; background-color: #1877f2; color: white; padding: 12px; border: none; border-radius: 6px; font-size: 16px; font-weight: bold; cursor: pointer; }
-        input[type="submit"]:hover { background-color: #166fe5; }
-        .result { background: #e7f3ff; border: 1px solid #1877f2; padding: 15px; border-radius: 6px; margin-top: 20px; word-wrap: break-word; font-family: 'Courier New', Courier, monospace; }
+        body { font-family: sans-serif; background-color: #f0f2f5; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
+        .container { background: #fff; padding: 30px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); width: 90%; max-width: 400px; }
+        h1 { color: #1877f2; text-align: center; margin-bottom: 20px; }
+        input { width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 6px; margin-bottom: 15px; box-sizing: border-box; }
+        input[type="submit"] { background-color: #1877f2; color: white; font-weight: bold; cursor: pointer; }
+        .result { padding: 15px; margin-top: 20px; border-radius: 6px; word-wrap: break-word; }
+        .success { background: #e7f3ff; border: 1px solid #1877f2; }
         .error { background: #ffebe8; border: 1px solid #dd3c1e; }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>Lifetime Token Generator</h1>
-        <p>Apna Facebook ID login karke lifetime token haasil karein.</p>
+        <h1>Simple Token Generator</h1>
         <form method="post">
             <input type="text" name="username" placeholder="Email ya Username" required>
-            <input type="password" name="password" placeholder="Password (ya App Password)" required>
+            <input type="password" name="password" placeholder="Asli Password" required>
             <input type="submit" value="Generate Token">
         </form>
         {% if result %}
-            <div class="result {% if 'Error' in result %}error{% endif %}">
-                <strong>Aapka Lifetime Token:</strong><br>
-                {{ result }}
+            <div class="result {% if 'Error' in result %}error{% else %}success{% endif %}">
+                <strong>Result:</strong><br>{{ result }}
             </div>
         {% endif %}
     </div>
@@ -91,10 +84,7 @@ def home():
     if request.method == 'POST':
         username = request.form.get('username')
         password = request.form.get('password')
-        if username and password:
-            result = get_monokai_style_token(username, password)
-        else:
-            result = "Error: Username aur Password dono zaroori hain."
+        result = get_simple_token(username, password)
     return render_template_string(HTML_TEMPLATE, result=result)
 
 if __name__ == "__main__":
